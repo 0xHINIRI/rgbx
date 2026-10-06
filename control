@@ -1,0 +1,9 @@
+Package: com.me.rgbx
+Name: RGBX
+Version: 1.0
+Architecture: iphoneos-arm
+Description: RGB background
+Maintainer: me
+Author: me
+Section: Tweaks
+Depends: mobilesubstrate
