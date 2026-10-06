@@ -5,4 +5,5 @@ TWEAK_NAME = RGBX
 RGBX_FILES = Tweak.x
 RGBX_CFLAGS = -fobjc-arc
 RGBX_LDFLAGS = -Wl,-undefined,dynamic_lookup
+RGBX_USE_SUBSTRATE = 0
 include $(THEOS_MAKE_PATH)/tweak.mk
