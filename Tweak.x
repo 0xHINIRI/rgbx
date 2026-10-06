@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 
 static NSHashTable *rgbViews;
 static CADisplayLink *rgbLink;
@@ -22,8 +23,12 @@ static BOOL isBlack(UIColor *c) {
 }
 @end
 
-%hook UIView
-- (void)setBackgroundColor:(UIColor *)color {
+@interface UIView (RGBX)
+- (void)rgbx_setBackgroundColor:(UIColor *)color;
+@end
+
+@implementation UIView (RGBX)
+- (void)rgbx_setBackgroundColor:(UIColor *)color {
     if (color && isBlack(color)) {
         if (!rgbViews) rgbViews = [NSHashTable weakObjectsHashTable];
         [rgbViews addObject:self];
@@ -34,6 +39,13 @@ static BOOL isBlack(UIColor *c) {
         }
         color = [UIColor colorWithHue:rgbHue saturation:1 brightness:0.6 alpha:1];
     }
-    %orig(color);
+    [self rgbx_setBackgroundColor:color];
 }
-%end
+@end
+
+__attribute__((constructor))
+static void rgbx_init(void) {
+    Method a = class_getInstanceMethod([UIView class], @selector(setBackgroundColor:));
+    Method b = class_getInstanceMethod([UIView class], @selector(rgbx_setBackgroundColor:));
+    method_exchangeImplementations(a, b);
+}
