@@ -1,9 +1,9 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 
-static NSHashTable *views;
-static CADisplayLink *link;
-static CGFloat hue = 0;
+static NSHashTable *rgbViews;
+static CADisplayLink *rgbLink;
+static CGFloat rgbHue = 0;
 
 static BOOL isBlack(UIColor *c) {
     CGFloat r,g,b,a;
@@ -16,23 +16,23 @@ static BOOL isBlack(UIColor *c) {
 @end
 @implementation RGBTick
 + (void)tick {
-    hue += 0.002; if (hue > 1) hue = 0;
-    UIColor *c = [UIColor colorWithHue:hue saturation:1 brightness:0.6 alpha:1];
-    for (UIView *v in views.allObjects) v.backgroundColor = c;
+    rgbHue += 0.002; if (rgbHue > 1) rgbHue = 0;
+    UIColor *c = [UIColor colorWithHue:rgbHue saturation:1 brightness:0.6 alpha:1];
+    for (UIView *v in rgbViews.allObjects) v.backgroundColor = c;
 }
 @end
 
 %hook UIView
 - (void)setBackgroundColor:(UIColor *)color {
     if (color && isBlack(color)) {
-        if (!views) views = [NSHashTable weakObjectsHashTable];
-        [views addObject:self];
-        if (!link) {
-            link = [CADisplayLink displayLinkWithTarget:[RGBTick class] selector:@selector(tick)];
-            link.preferredFramesPerSecond = 20;
-            [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+        if (!rgbViews) rgbViews = [NSHashTable weakObjectsHashTable];
+        [rgbViews addObject:self];
+        if (!rgbLink) {
+            rgbLink = [CADisplayLink displayLinkWithTarget:[RGBTick class] selector:@selector(tick)];
+            rgbLink.preferredFramesPerSecond = 20;
+            [rgbLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
         }
-        color = [UIColor colorWithHue:hue saturation:1 brightness:0.6 alpha:1];
+        color = [UIColor colorWithHue:rgbHue saturation:1 brightness:0.6 alpha:1];
     }
     %orig(color);
 }
