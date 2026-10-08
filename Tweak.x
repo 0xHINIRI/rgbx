@@ -1,51 +1,92 @@
 #import <UIKit/UIKit.h>
-#import <QuartzCore/QuartzCore.h>
+#import <CoreLocation/CoreLocation.h>
 #import <objc/runtime.h>
 
-static NSHashTable *rgbViews;
-static CADisplayLink *rgbLink;
-static CGFloat rgbHue = 0;
+// الاسم, خط العرض, خط الطول
+static NSArray *places;
+static NSInteger idx = 0;
+static NSHashTable *mgrs;
+static UIButton *btn;
 
-static BOOL isBlack(UIColor *c) {
-    CGFloat r,g,b,a;
-    return [c getRed:&r green:&g blue:&b alpha:&a]
-        && r<0.08 && g<0.08 && b<0.08 && a>0.9;
+static CLLocation *fake(void) {
+    NSArray *p = places[idx];
+    return [[CLLocation alloc]
+        initWithCoordinate:CLLocationCoordinate2DMake([p[1] doubleValue], [p[2] doubleValue])
+        altitude:10 horizontalAccuracy:5 verticalAccuracy:5 timestamp:[NSDate date]];
 }
 
-@interface RGBTick : NSObject
+@interface CLLocationManager (LX)
+- (void)lx_push;
+@end
+
+@implementation CLLocationManager (LX)
+- (CLLocation *)lx_location { return fake(); }
+- (void)lx_push {
+    id d = self.delegate;
+    if ([d respondsToSelector:@selector(locationManager:didUpdateLocations:)])
+        [d locationManager:self didUpdateLocations:@[fake()]];
+}
+- (void)lx_start { [mgrs addObject:self]; [self lx_push]; }
+- (void)lx_stop { [mgrs removeObject:self]; }
+- (void)lx_request { [self lx_push]; }
+@end
+
+@interface LXHelper : NSObject
++ (void)tap;
 + (void)tick;
 @end
-@implementation RGBTick
-+ (void)tick {
-    rgbHue += 0.002; if (rgbHue > 1) rgbHue = 0;
-    UIColor *c = [UIColor colorWithHue:rgbHue saturation:1 brightness:0.6 alpha:1];
-    for (UIView *v in rgbViews.allObjects) v.backgroundColor = c;
+@implementation LXHelper
++ (void)tap {
+    idx = (idx + 1) % places.count;
+    [btn setTitle:[@"📍 " stringByAppendingString:places[idx][0]] forState:UIControlStateNormal];
+    for (CLLocationManager *m in mgrs.allObjects) [m lx_push];
 }
++ (void)tick { for (CLLocationManager *m in mgrs.allObjects) [m lx_push]; }
 @end
 
-@interface UIView (RGBX)
-- (void)rgbx_setBackgroundColor:(UIColor *)color;
-@end
-
-@implementation UIView (RGBX)
-- (void)rgbx_setBackgroundColor:(UIColor *)color {
-    if (color && isBlack(color)) {
-        if (!rgbViews) rgbViews = [NSHashTable weakObjectsHashTable];
-        [rgbViews addObject:self];
-        if (!rgbLink) {
-            rgbLink = [CADisplayLink displayLinkWithTarget:[RGBTick class] selector:@selector(tick)];
-            rgbLink.preferredFramesPerSecond = 20;
-            [rgbLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-        }
-        color = [UIColor colorWithHue:rgbHue saturation:1 brightness:0.6 alpha:1];
-    }
-    [self rgbx_setBackgroundColor:color];
+static UIWindow *keyWin(void) {
+    for (UIScene *s in UIApplication.sharedApplication.connectedScenes)
+        if ([s isKindOfClass:[UIWindowScene class]])
+            for (UIWindow *w in ((UIWindowScene *)s).windows)
+                if (w.isKeyWindow) return w;
+    return nil;
 }
-@end
+
+static void sw(SEL a, SEL b) {
+    Class c = [CLLocationManager class];
+    method_exchangeImplementations(class_getInstanceMethod(c, a), class_getInstanceMethod(c, b));
+}
 
 __attribute__((constructor))
-static void rgbx_init(void) {
-    Method a = class_getInstanceMethod([UIView class], @selector(setBackgroundColor:));
-    Method b = class_getInstanceMethod([UIView class], @selector(rgbx_setBackgroundColor:));
-    method_exchangeImplementations(a, b);
+static void lx_init(void) {
+    places = @[
+        @[@"Madrid", @40.4168, @-3.7038],
+        @[@"Casablanca", @33.5731, @-7.5898],
+        @[@"Paris", @48.8566, @2.3522],
+        @[@"London", @51.5074, @-0.1278],
+        @[@"New York", @40.7128, @-74.0060]
+    ];
+    mgrs = [NSHashTable weakObjectsHashTable];
+    sw(@selector(location), @selector(lx_location));
+    sw(@selector(startUpdatingLocation), @selector(lx_start));
+    sw(@selector(stopUpdatingLocation), @selector(lx_stop));
+    sw(@selector(requestLocation), @selector(lx_request));
+
+    [NSTimer scheduledTimerWithTimeInterval:1 target:[LXHelper class]
+        selector:@selector(tick) userInfo:nil repeats:YES];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{
+        UIWindow *w = keyWin();
+        if (!w) return;
+        btn = [UIButton buttonWithType:UIButtonTypeSystem];
+        btn.frame = CGRectMake(10, 90, 150, 36);
+        btn.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
+        btn.layer.cornerRadius = 18;
+        [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+        [btn setTitle:[@"📍 " stringByAppendingString:places[0][0]] forState:UIControlStateNormal];
+        [btn addTarget:[LXHelper class] action:@selector(tap)
+            forControlEvents:UIControlEventTouchUpInside];
+        [w addSubview:btn];
+    });
 }
